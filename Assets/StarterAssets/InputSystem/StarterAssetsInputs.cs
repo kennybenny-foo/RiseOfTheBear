@@ -12,6 +12,7 @@ namespace StarterAssets
 		public Vector2 look;
 		public bool jump;
 		public bool sprint;
+		public bool shoot;
 
 		[Header("Movement Settings")]
 		public bool analogMovement;
@@ -75,6 +76,17 @@ namespace StarterAssets
 		{
 			Cursor.lockState = newState ? CursorLockMode.Locked : CursorLockMode.None;
 		}
+
+		// Called automatically by PlayerInput's Send Messages behavior
+		public void OnShoot(InputValue value)
+		{
+			ShootInput(value.isPressed);
+		}
+		public void ShootInput(bool newShootState)
+		{
+			shoot = newShootState;
+		}	
+
 	}
 	
 }
