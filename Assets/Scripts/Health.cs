@@ -4,6 +4,7 @@ public class Health : MonoBehaviour
 {
     [SerializeField] float maxHealth = 100f;
     float currentHealth;
+    bool isDead = false;
 
     void Start()
     {
@@ -12,6 +13,11 @@ public class Health : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
+        if (isDead)
+        {
+            return;
+        }
+
         currentHealth -= amount;
         Debug.Log(gameObject.name + " health: " + currentHealth);
 
@@ -23,15 +29,24 @@ public class Health : MonoBehaviour
 
     void Die()
     {
+        isDead = true;
+
         Robot robot = GetComponent<Robot>();
 
         if (robot != null)
         {
             robot.Die();
+            return;
         }
-        else
+
+        TeddyEnemy teddy = GetComponent<TeddyEnemy>();
+
+        if (teddy != null)
         {
-            Destroy(gameObject);
+            teddy.Die();
+            return;
         }
+
+        Destroy(gameObject);
     }
 }
