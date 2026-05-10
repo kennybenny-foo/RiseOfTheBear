@@ -8,8 +8,20 @@ public class TeddyEnemy : MonoBehaviour
     NavMeshAgent agent;
     Animator animator;
 
+    [Header("Detection")]
+    [SerializeField] float detectionRange = 12f;
+    [SerializeField] float fieldOfViewAngle = 120f;
+
     [Header("Movement")]
     [SerializeField] float stoppingDistance = 2f;
+    [SerializeField] float chaseSpeed = 6f;
+
+    [Header("Attack")]
+    [SerializeField] float attackRange = 2.3f;
+    [SerializeField] float attackCooldown = 1.2f;
+
+    bool isDead = false;
+    float nextAttackTime = 0f;
 
     void Awake()
     {
@@ -24,27 +36,124 @@ public class TeddyEnemy : MonoBehaviour
         if (agent != null)
         {
             agent.stoppingDistance = stoppingDistance;
+            agent.speed = chaseSpeed;
+            agent.isStopped = true;
         }
     }
 
     void Update()
     {
-        if (player == null || agent == null)
+        if (isDead || player == null || agent == null)
         {
             return;
         }
 
+        float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
+        bool canSeePlayer = CanSeePlayer();
+
+        if (canSeePlayer && distanceToPlayer <= attackRange)
+        {
+            Attack();
+        }
+        else if (canSeePlayer)
+        {
+            ChasePlayer();
+        }
+        else
+        {
+            StopChasing();
+        }
+    }
+
+    void ChasePlayer()
+    {
+        agent.isStopped = false;
+        agent.speed = chaseSpeed;
         agent.SetDestination(player.transform.position);
 
         if (animator != null)
         {
-            float speed = agent.velocity.magnitude;
-            animator.SetFloat("Speed", speed);
+            animator.SetFloat("Speed", 1f);
         }
+    }
+
+    void StopChasing()
+    {
+        agent.isStopped = true;
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0f);
+        }
+    }
+
+    void Attack()
+    {
+        agent.isStopped = true;
+
+        // Face the player while attacking
+        Vector3 lookDirection = player.transform.position - transform.position;
+        lookDirection.y = 0f;
+
+        if (lookDirection != Vector3.zero)
+        {
+            transform.rotation = Quaternion.LookRotation(lookDirection);
+        }
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0f);
+        }
+
+        if (Time.time >= nextAttackTime)
+        {
+            if (animator != null)
+            {
+                animator.SetTrigger("Attack");
+            }
+
+            nextAttackTime = Time.time + attackCooldown;
+        }
+    }
+
+    bool CanSeePlayer()
+    {
+        Vector3 directionToPlayer = player.transform.position - transform.position;
+        float distanceToPlayer = directionToPlayer.magnitude;
+
+        if (distanceToPlayer > detectionRange)
+        {
+            return false;
+        }
+
+        float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
+
+        if (angleToPlayer > fieldOfViewAngle / 2f)
+        {
+            return false;
+        }
+
+        Vector3 eyePosition = transform.position + Vector3.up * 1.2f;
+        Vector3 playerPosition = player.transform.position + Vector3.up * 1f;
+        Vector3 rayDirection = playerPosition - eyePosition;
+
+        if (Physics.Raycast(eyePosition, rayDirection.normalized, out RaycastHit hit, detectionRange))
+        {
+            FirstPersonController seenPlayer = hit.collider.GetComponentInParent<FirstPersonController>();
+
+            if (seenPlayer != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void Die()
     {
+        isDead = true;
+
         if (agent != null)
         {
             agent.isStopped = true;
@@ -52,9 +161,30 @@ public class TeddyEnemy : MonoBehaviour
 
         if (animator != null)
         {
+            animator.SetFloat("Speed", 0f);
             animator.SetTrigger("Die");
         }
 
         Destroy(gameObject, 3f);
     }
+   void OnDrawGizmosSelected()
+{
+    // Draw detection range circle
+    Gizmos.color = Color.yellow;
+    Gizmos.DrawWireSphere(transform.position, detectionRange);
+
+    // Draw field of view lines
+    Gizmos.color = Color.red;
+
+    Vector3 leftBoundary = Quaternion.Euler(0, -fieldOfViewAngle / 2f, 0) * transform.forward;
+    Vector3 rightBoundary = Quaternion.Euler(0, fieldOfViewAngle / 2f, 0) * transform.forward;
+
+    Gizmos.DrawRay(transform.position, leftBoundary * detectionRange);
+    Gizmos.DrawRay(transform.position, rightBoundary * detectionRange);
+
+    // Draw forward direction
+    Gizmos.color = Color.blue;
+    Gizmos.DrawRay(transform.position, transform.forward * detectionRange);
+} 
 }
+
