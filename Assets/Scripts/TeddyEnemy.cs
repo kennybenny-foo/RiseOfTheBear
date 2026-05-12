@@ -19,6 +19,7 @@ public class TeddyEnemy : MonoBehaviour
     [Header("Attack")]
     [SerializeField] float attackRange = 2.3f;
     [SerializeField] float attackCooldown = 1.2f;
+    [SerializeField] float attackDamage = 10f;
 
     bool isDead = false;
     float nextAttackTime = 0f;
@@ -91,7 +92,6 @@ public class TeddyEnemy : MonoBehaviour
     {
         agent.isStopped = true;
 
-        // Face the player while attacking
         Vector3 lookDirection = player.transform.position - transform.position;
         lookDirection.y = 0f;
 
@@ -113,6 +113,29 @@ public class TeddyEnemy : MonoBehaviour
             }
 
             nextAttackTime = Time.time + attackCooldown;
+        }
+    }
+
+    // This function is called by the Animation Event during the punch animation.
+    public void DealAttackDamage()
+    {
+        if (isDead || player == null)
+        {
+            return;
+        }
+
+        float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
+
+        if (distanceToPlayer > attackRange)
+        {
+            return;
+        }
+
+        PlayerHealth playerHealth = player.GetComponent<PlayerHealth>();
+
+        if (playerHealth != null)
+        {
+            playerHealth.TakeDamage(attackDamage);
         }
     }
 
@@ -167,24 +190,25 @@ public class TeddyEnemy : MonoBehaviour
 
         Destroy(gameObject, 3f);
     }
-   void OnDrawGizmosSelected()
-{
-    // Draw detection range circle
-    Gizmos.color = Color.yellow;
-    Gizmos.DrawWireSphere(transform.position, detectionRange);
 
-    // Draw field of view lines
-    Gizmos.color = Color.red;
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
 
-    Vector3 leftBoundary = Quaternion.Euler(0, -fieldOfViewAngle / 2f, 0) * transform.forward;
-    Vector3 rightBoundary = Quaternion.Euler(0, fieldOfViewAngle / 2f, 0) * transform.forward;
+        Gizmos.color = Color.red;
 
-    Gizmos.DrawRay(transform.position, leftBoundary * detectionRange);
-    Gizmos.DrawRay(transform.position, rightBoundary * detectionRange);
+        Vector3 leftBoundary = Quaternion.Euler(0, -fieldOfViewAngle / 2f, 0) * transform.forward;
+        Vector3 rightBoundary = Quaternion.Euler(0, fieldOfViewAngle / 2f, 0) * transform.forward;
 
-    // Draw forward direction
-    Gizmos.color = Color.blue;
-    Gizmos.DrawRay(transform.position, transform.forward * detectionRange);
-} 
+        Gizmos.DrawRay(transform.position, leftBoundary * detectionRange);
+        Gizmos.DrawRay(transform.position, rightBoundary * detectionRange);
+
+        Gizmos.color = Color.blue;
+        Gizmos.DrawRay(transform.position, transform.forward * detectionRange);
+
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+    }
 }
 
