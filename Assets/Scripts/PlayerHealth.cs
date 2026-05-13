@@ -1,10 +1,15 @@
 using System;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class PlayerHealth : MonoBehaviour
 {
     [SerializeField] float maxHealth = 100f;
+
+    [Header("Sounds")]
+    [SerializeField] AudioClip damageSound;
+    [SerializeField] AudioClip healSound;
+    [SerializeField] AudioClip deathSound;
+    [SerializeField] AudioSource audioSource;
 
     float currentHealth;
     bool isDead = false;
@@ -12,24 +17,17 @@ public class PlayerHealth : MonoBehaviour
     public event Action<float, float> OnHealthChanged;
     public event Action OnPlayerDied;
 
+    void Awake()
+    {
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
+    }
+
     void Start()
     {
         currentHealth = maxHealth;
-        OnHealthChanged?.Invoke(currentHealth, maxHealth);
-    }
-
-    public void Heal(float amount)
-    {
-    if (isDead)
-    {
-        return;
-    }
-
-        currentHealth += amount;
-        currentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth);
-
-        Debug.Log("Player healed. Health: " + currentHealth);
-
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
@@ -45,6 +43,8 @@ public class PlayerHealth : MonoBehaviour
 
         Debug.Log("Player health: " + currentHealth);
 
+        PlaySound(damageSound);
+
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
         if (currentHealth <= 0)
@@ -53,14 +53,46 @@ public class PlayerHealth : MonoBehaviour
         }
     }
 
+    public void Heal(float amount)
+    {
+        if (isDead)
+        {
+            return;
+        }
+
+        currentHealth += amount;
+        currentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth);
+
+        Debug.Log("Player healed. Health: " + currentHealth);
+
+        PlaySound(healSound);
+
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+    }
+
     void Die()
     {
         isDead = true;
+
         Debug.Log("Player died");
+
+        PlaySound(deathSound);
 
         OnPlayerDied?.Invoke();
 
-        // Simple lose behavior for now
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        GameManager gameManager = FindFirstObjectByType<GameManager>();
+
+        if (gameManager != null)
+        {
+            gameManager.LoseGame();
+        }
+    }
+
+    void PlaySound(AudioClip clip)
+    {
+        if (clip != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(clip);
+        }
     }
 }

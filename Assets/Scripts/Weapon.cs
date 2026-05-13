@@ -1,11 +1,17 @@
+using System;
 using StarterAssets;
 using UnityEngine;
 using System.Collections;
 
 public class Weapon : MonoBehaviour
 {
+    [Header("Weapon Stats")]
     [SerializeField] float damage = 25f;
     [SerializeField] float range = 100f;
+
+    [Header("Ammo")]
+    [SerializeField] int maxAmmo = 12;
+    [SerializeField] int currentAmmo;
 
     [Header("Effects")]
     [SerializeField] ParticleSystem muzzleFlash;
@@ -14,6 +20,14 @@ public class Weapon : MonoBehaviour
     [SerializeField] float trailDuration = 0.02f;
     [SerializeField] float trailWidth = 0.02f;
 
+    [Header("Sounds")]
+    [SerializeField] AudioClip shootSound;
+    [SerializeField] AudioClip outOfAmmoSound;
+    [SerializeField] AudioClip hitSound;
+    [SerializeField] AudioSource audioSource;
+
+    public event Action<int, int, bool> OnAmmoChanged;
+
     StarterAssetsInputs starterAssetsInputs;
     Camera mainCamera;
 
@@ -21,19 +35,60 @@ public class Weapon : MonoBehaviour
     {
         starterAssetsInputs = GetComponentInParent<StarterAssetsInputs>();
         mainCamera = Camera.main;
+
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
+    }
+
+    void Start()
+    {
+        currentAmmo = maxAmmo;
+        NotifyAmmoChanged();
     }
 
     void Update()
     {
+        if (Time.timeScale == 0f)
+        {
+            if (starterAssetsInputs != null)
+            {
+                starterAssetsInputs.ShootInput(false);
+            }
+
+            return;
+        }
+
+        if (starterAssetsInputs == null)
+        {
+            return;
+        }
+
         if (starterAssetsInputs.shoot)
         {
-            Shoot();
+            if (currentAmmo > 0)
+            {
+                Shoot();
+            }
+            else
+            {
+                PlaySound(outOfAmmoSound);
+                Debug.Log("Out of ammo! Find an ammo pickup.");
+                NotifyAmmoChanged();
+            }
+
             starterAssetsInputs.ShootInput(false);
         }
     }
 
     void Shoot()
     {
+        currentAmmo--;
+        NotifyAmmoChanged();
+
+        PlaySound(shootSound);
+
         if (mainCamera == null)
         {
             mainCamera = Camera.main;
@@ -62,11 +117,12 @@ public class Weapon : MonoBehaviour
         {
             trailEnd = hit.point;
 
-            Health health = hit.collider.GetComponent<Health>();
+            Health health = hit.collider.GetComponentInParent<Health>();
 
             if (health != null)
             {
                 health.TakeDamage(damage);
+                PlaySound(hitSound);
             }
         }
         else
@@ -75,6 +131,29 @@ public class Weapon : MonoBehaviour
         }
 
         StartCoroutine(CreateBulletTrail(trailStart, trailEnd));
+    }
+
+    public void AddAmmo(int amount)
+    {
+        currentAmmo += amount;
+        currentAmmo = Mathf.Clamp(currentAmmo, 0, maxAmmo);
+
+        Debug.Log("Ammo: " + currentAmmo + " / " + maxAmmo);
+
+        NotifyAmmoChanged();
+    }
+
+    void NotifyAmmoChanged()
+    {
+        OnAmmoChanged?.Invoke(currentAmmo, maxAmmo, false);
+    }
+
+    void PlaySound(AudioClip clip)
+    {
+        if (clip != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(clip);
+        }
     }
 
     IEnumerator CreateBulletTrail(Vector3 startPoint, Vector3 endPoint)

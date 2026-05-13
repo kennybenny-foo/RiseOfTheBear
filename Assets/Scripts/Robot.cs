@@ -10,6 +10,9 @@ public class Robot : MonoBehaviour
     [Header("Death Effect")]
     public ParticleSystem deathParticles;
 
+    [Header("Sounds")]
+    [SerializeField] AudioClip deathSound;
+
     void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
@@ -30,7 +33,10 @@ public class Robot : MonoBehaviour
 
     public void Die()
     {
-        Debug.Log("Robot Die() was called");
+        if (deathSound != null)
+        {
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+        }
 
         if (deathParticles != null)
         {
@@ -46,10 +52,6 @@ public class Robot : MonoBehaviour
                 particles.gameObject,
                 particles.main.duration + particles.main.startLifetime.constantMax
             );
-        }
-        else
-        {
-            Debug.LogWarning("Death Particles is not assigned on the Robot!");
         }
 
         Destroy(gameObject);

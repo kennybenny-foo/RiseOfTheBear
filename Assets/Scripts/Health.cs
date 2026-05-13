@@ -3,6 +3,7 @@ using UnityEngine;
 public class Health : MonoBehaviour
 {
     [SerializeField] float maxHealth = 100f;
+
     float currentHealth;
     bool isDead = false;
 
@@ -30,6 +31,13 @@ public class Health : MonoBehaviour
     void Die()
     {
         isDead = true;
+
+        GameManager gameManager = FindFirstObjectByType<GameManager>();
+
+        if (gameManager != null)
+        {
+            gameManager.EnemyDefeated();
+        }
 
         Robot robot = GetComponent<Robot>();
 

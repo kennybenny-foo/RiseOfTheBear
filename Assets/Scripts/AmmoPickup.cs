@@ -1,8 +1,8 @@
 using UnityEngine;
 
-public class HealthPickup : MonoBehaviour
+public class AmmoPickup : MonoBehaviour
 {
-    [SerializeField] float healAmount = 25f;
+    [SerializeField] int ammoAmount = 12;
     [SerializeField] float rotateSpeed = 90f;
     [SerializeField] float bobSpeed = 2f;
     [SerializeField] float bobHeight = 0.25f;
@@ -27,11 +27,11 @@ public class HealthPickup : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
-        PlayerHealth playerHealth = other.GetComponentInParent<PlayerHealth>();
+        Weapon weapon = other.GetComponentInChildren<Weapon>();
 
-        if (playerHealth != null)
+        if (weapon != null)
         {
-            playerHealth.Heal(healAmount);
+            weapon.AddAmmo(ammoAmount);
 
             if (pickupSound != null)
             {

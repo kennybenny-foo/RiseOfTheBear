@@ -1,6 +1,7 @@
 using StarterAssets;
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections;
 
 public class TeddyEnemy : MonoBehaviour
 {
@@ -12,34 +13,92 @@ public class TeddyEnemy : MonoBehaviour
     [SerializeField] float detectionRange = 12f;
     [SerializeField] float fieldOfViewAngle = 120f;
 
+    [Header("Patrol")]
+    [SerializeField] Transform patrolPointA;
+    [SerializeField] Transform patrolPointB;
+    [SerializeField] float patrolSpeed = 2f;
+    [SerializeField] float patrolWaitTime = 2f;
+    [SerializeField] float patrolPointReachDistance = 0.6f;
+
     [Header("Movement")]
     [SerializeField] float stoppingDistance = 2f;
     [SerializeField] float chaseSpeed = 6f;
+    [SerializeField] float turnSpeed = 8f;
+    [SerializeField] float modelFacingOffsetY = 0f;
 
     [Header("Attack")]
     [SerializeField] float attackRange = 2.3f;
     [SerializeField] float attackCooldown = 1.2f;
     [SerializeField] float attackDamage = 10f;
 
+    [Header("Sounds")]
+    [SerializeField] AudioClip spotPlayerSound;
+    [SerializeField] AudioClip attackSound;
+    [SerializeField] AudioClip punchHitSound;
+    [SerializeField] AudioClip deathSound;
+    [SerializeField] AudioSource audioSource;
+
     bool isDead = false;
+    bool hasSpottedPlayer = false;
+    bool isWaitingAtPatrolPoint = false;
+
     float nextAttackTime = 0f;
+
+    Vector3 patrolPositionA;
+    Vector3 patrolPositionB;
+    Vector3 currentPatrolTarget;
+
+    bool goingToA = true;
 
     void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponentInChildren<Animator>();
+
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
     }
 
     void Start()
     {
         player = FindFirstObjectByType<FirstPersonController>();
 
+        if (patrolPointA != null)
+        {
+            patrolPositionA = patrolPointA.position;
+        }
+        else
+        {
+            patrolPositionA = transform.position + transform.right * -4f;
+        }
+
+        if (patrolPointB != null)
+        {
+            patrolPositionB = patrolPointB.position;
+        }
+        else
+        {
+            patrolPositionB = transform.position + transform.right * 4f;
+        }
+
+        currentPatrolTarget = patrolPositionA;
+        goingToA = true;
+
         if (agent != null)
         {
-            agent.stoppingDistance = stoppingDistance;
-            agent.speed = chaseSpeed;
-            agent.isStopped = true;
+            agent.updateRotation = false;
+            agent.updatePosition = true;
+
+            agent.speed = patrolSpeed;
+            agent.stoppingDistance = 0f;
+            agent.isStopped = false;
+            agent.ResetPath();
+            agent.SetDestination(currentPatrolTarget);
         }
+
+        Debug.Log(gameObject.name + " starting patrol target: " + currentPatrolTarget);
     }
 
     void Update()
@@ -52,6 +111,17 @@ public class TeddyEnemy : MonoBehaviour
         float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
         bool canSeePlayer = CanSeePlayer();
 
+        if (canSeePlayer && !hasSpottedPlayer)
+        {
+            hasSpottedPlayer = true;
+            PlaySound(spotPlayerSound);
+        }
+
+        if (!canSeePlayer)
+        {
+            hasSpottedPlayer = false;
+        }
+
         if (canSeePlayer && distanceToPlayer <= attackRange)
         {
             Attack();
@@ -62,15 +132,84 @@ public class TeddyEnemy : MonoBehaviour
         }
         else
         {
-            StopChasing();
+            Patrol();
         }
+    }
+
+    void Patrol()
+    {
+        if (isWaitingAtPatrolPoint)
+        {
+            return;
+        }
+
+        agent.isStopped = false;
+        agent.speed = patrolSpeed;
+        agent.stoppingDistance = 0f;
+        agent.SetDestination(currentPatrolTarget);
+
+        RotateTowardMovement();
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0.5f);
+        }
+
+        float distanceToPatrolPoint = Vector3.Distance(transform.position, currentPatrolTarget);
+
+        if (distanceToPatrolPoint <= patrolPointReachDistance)
+        {
+            StartCoroutine(WaitThenSwitchPatrolPoint());
+        }
+    }
+
+    IEnumerator WaitThenSwitchPatrolPoint()
+    {
+        isWaitingAtPatrolPoint = true;
+
+        agent.isStopped = true;
+        agent.ResetPath();
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0f);
+        }
+
+        Debug.Log(gameObject.name + " reached patrol point. Waiting.");
+
+        yield return new WaitForSeconds(patrolWaitTime);
+
+        goingToA = !goingToA;
+        currentPatrolTarget = goingToA ? patrolPositionA : patrolPositionB;
+
+        Debug.Log(gameObject.name + " new patrol target: " + currentPatrolTarget);
+
+        FaceTargetInstant(currentPatrolTarget);
+
+        agent.isStopped = false;
+        agent.speed = patrolSpeed;
+        agent.stoppingDistance = 0f;
+        agent.ResetPath();
+        agent.SetDestination(currentPatrolTarget);
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0.5f);
+        }
+
+        isWaitingAtPatrolPoint = false;
     }
 
     void ChasePlayer()
     {
+        isWaitingAtPatrolPoint = false;
+
         agent.isStopped = false;
         agent.speed = chaseSpeed;
+        agent.stoppingDistance = stoppingDistance;
         agent.SetDestination(player.transform.position);
+
+        RotateTowardMovement();
 
         if (animator != null)
         {
@@ -78,27 +217,14 @@ public class TeddyEnemy : MonoBehaviour
         }
     }
 
-    void StopChasing()
-    {
-        agent.isStopped = true;
-
-        if (animator != null)
-        {
-            animator.SetFloat("Speed", 0f);
-        }
-    }
-
     void Attack()
     {
+        isWaitingAtPatrolPoint = false;
+
         agent.isStopped = true;
+        agent.ResetPath();
 
-        Vector3 lookDirection = player.transform.position - transform.position;
-        lookDirection.y = 0f;
-
-        if (lookDirection != Vector3.zero)
-        {
-            transform.rotation = Quaternion.LookRotation(lookDirection);
-        }
+        FaceTargetInstant(player.transform.position);
 
         if (animator != null)
         {
@@ -112,11 +238,46 @@ public class TeddyEnemy : MonoBehaviour
                 animator.SetTrigger("Attack");
             }
 
+            PlaySound(attackSound);
+
             nextAttackTime = Time.time + attackCooldown;
         }
     }
 
-    // This function is called by the Animation Event during the punch animation.
+    void RotateTowardMovement()
+    {
+        Vector3 direction = agent.desiredVelocity;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.01f)
+        {
+            direction = currentPatrolTarget - transform.position;
+            direction.y = 0f;
+        }
+
+        if (direction.sqrMagnitude > 0.01f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(direction) * Quaternion.Euler(0f, modelFacingOffsetY, 0f);
+
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                targetRotation,
+                turnSpeed * Time.deltaTime
+            );
+        }
+    }
+
+    void FaceTargetInstant(Vector3 targetPosition)
+    {
+        Vector3 direction = targetPosition - transform.position;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude > 0.01f)
+        {
+            transform.rotation = Quaternion.LookRotation(direction) * Quaternion.Euler(0f, modelFacingOffsetY, 0f);
+        }
+    }
+
     public void DealAttackDamage()
     {
         if (isDead || player == null)
@@ -136,6 +297,7 @@ public class TeddyEnemy : MonoBehaviour
         if (playerHealth != null)
         {
             playerHealth.TakeDamage(attackDamage);
+            PlaySound(punchHitSound);
         }
     }
 
@@ -177,9 +339,12 @@ public class TeddyEnemy : MonoBehaviour
     {
         isDead = true;
 
+        PlaySound(deathSound);
+
         if (agent != null)
         {
             agent.isStopped = true;
+            agent.ResetPath();
         }
 
         if (animator != null)
@@ -189,6 +354,14 @@ public class TeddyEnemy : MonoBehaviour
         }
 
         Destroy(gameObject, 3f);
+    }
+
+    void PlaySound(AudioClip clip)
+    {
+        if (clip != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(clip);
+        }
     }
 
     void OnDrawGizmosSelected()
@@ -209,6 +382,13 @@ public class TeddyEnemy : MonoBehaviour
 
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        if (patrolPointA != null && patrolPointB != null)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawSphere(patrolPointA.position, 0.25f);
+            Gizmos.DrawSphere(patrolPointB.position, 0.25f);
+            Gizmos.DrawLine(patrolPointA.position, patrolPointB.position);
+        }
     }
 }
-
