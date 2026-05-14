@@ -52,6 +52,7 @@ public class ClawHazard : MonoBehaviour
     bool isLifting = false;
     bool isGrabbingPlayer = false;
     bool playerInSafeZone = false;
+    bool isStopped = false;
 
     float nextAttackTime = 0f;
     float topY;
@@ -102,6 +103,12 @@ public class ClawHazard : MonoBehaviour
     {
         if (player == null)
         {
+            return;
+        }
+
+        if (isStopped)
+        {
+            ReturnToStart();
             return;
         }
 
@@ -180,7 +187,7 @@ public class ClawHazard : MonoBehaviour
 
         HideWarningIndicator();
 
-        if (!playerInSafeZone)
+        if (!playerInSafeZone && !isStopped)
         {
             isDropping = true;
             PlaySound(dropSound);
@@ -286,6 +293,11 @@ public class ClawHazard : MonoBehaviour
 
         while (Vector3.Distance(transform.position, liftTarget) > 0.05f)
         {
+            if (isStopped)
+            {
+                break;
+            }
+
             transform.position = Vector3.MoveTowards(
                 transform.position,
                 liftTarget,
@@ -363,7 +375,7 @@ public class ClawHazard : MonoBehaviour
 
     void TryDamagePlayer()
     {
-        if (playerInSafeZone)
+        if (playerInSafeZone || isStopped)
         {
             return;
         }
@@ -417,6 +429,34 @@ public class ClawHazard : MonoBehaviour
 
             nextAttackTime = Time.time + cooldown;
         }
+    }
+
+    public void StopClaw(float duration)
+    {
+        StartCoroutine(StopClawRoutine(duration));
+    }
+
+    IEnumerator StopClawRoutine(float duration)
+    {
+        isStopped = true;
+
+        HideWarningIndicator();
+
+        isWarning = false;
+        isDropping = false;
+        isLifting = false;
+
+        OpenClaw();
+
+        if (player != null)
+        {
+            player.enabled = true;
+        }
+
+        yield return new WaitForSeconds(duration);
+
+        isStopped = false;
+        nextAttackTime = Time.time + cooldown;
     }
 
     void CloseClaw()

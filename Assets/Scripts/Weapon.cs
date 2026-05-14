@@ -6,19 +6,20 @@ using System.Collections;
 public class Weapon : MonoBehaviour
 {
     [Header("Weapon Stats")]
-    [SerializeField] float damage = 25f;
-    [SerializeField] float range = 100f;
+    [SerializeField] WeaponStats weaponStats;
 
     [Header("Ammo")]
-    [SerializeField] int maxAmmo = 12;
     [SerializeField] int currentAmmo;
 
     [Header("Effects")]
     [SerializeField] ParticleSystem muzzleFlash;
     [SerializeField] Transform bulletSpawnPoint;
     [SerializeField] Material bulletTrailMaterial;
-    [SerializeField] float trailDuration = 0.02f;
-    [SerializeField] float trailWidth = 0.02f;
+
+    [Header("Camera Shake")]
+    [SerializeField] CameraShake cameraShake;
+    [SerializeField] float shakeDuration = 0.08f;
+    [SerializeField] float shakeMagnitude = 0.03f;
 
     [Header("Sounds")]
     [SerializeField] AudioClip shootSound;
@@ -44,7 +45,14 @@ public class Weapon : MonoBehaviour
 
     void Start()
     {
-        currentAmmo = maxAmmo;
+        if (weaponStats == null)
+        {
+            Debug.LogError("WeaponStats is missing on " + gameObject.name);
+            enabled = false;
+            return;
+        }
+
+        currentAmmo = weaponStats.maxAmmo;
         NotifyAmmoChanged();
     }
 
@@ -99,21 +107,20 @@ public class Weapon : MonoBehaviour
             muzzleFlash.Play();
         }
 
-        if (bulletSpawnPoint == null)
+        if (cameraShake != null)
         {
-            Debug.LogWarning("Bullet Spawn Point is not assigned!");
-            return;
+            cameraShake.Shake(shakeDuration, shakeMagnitude);
         }
 
         Vector3 rayStart = mainCamera.transform.position;
         Vector3 rayDirection = mainCamera.transform.forward;
 
-        Vector3 trailStart = bulletSpawnPoint.position;
-        Vector3 trailEnd;
+        Vector3 trailStart = bulletSpawnPoint != null ? bulletSpawnPoint.position : rayStart;
+        Vector3 trailEnd = rayStart + rayDirection * weaponStats.range;
 
         RaycastHit hit;
 
-        if (Physics.Raycast(rayStart, rayDirection, out hit, range))
+        if (Physics.Raycast(rayStart, rayDirection, out hit, weaponStats.range))
         {
             trailEnd = hit.point;
 
@@ -121,13 +128,9 @@ public class Weapon : MonoBehaviour
 
             if (health != null)
             {
-                health.TakeDamage(damage);
+                health.TakeDamage(weaponStats.damage);
                 PlaySound(hitSound);
             }
-        }
-        else
-        {
-            trailEnd = rayStart + rayDirection * range;
         }
 
         StartCoroutine(CreateBulletTrail(trailStart, trailEnd));
@@ -136,16 +139,16 @@ public class Weapon : MonoBehaviour
     public void AddAmmo(int amount)
     {
         currentAmmo += amount;
-        currentAmmo = Mathf.Clamp(currentAmmo, 0, maxAmmo);
+        currentAmmo = Mathf.Clamp(currentAmmo, 0, weaponStats.maxAmmo);
 
-        Debug.Log("Ammo: " + currentAmmo + " / " + maxAmmo);
+        Debug.Log("Ammo: " + currentAmmo + " / " + weaponStats.maxAmmo);
 
         NotifyAmmoChanged();
     }
 
     void NotifyAmmoChanged()
     {
-        OnAmmoChanged?.Invoke(currentAmmo, maxAmmo, false);
+        OnAmmoChanged?.Invoke(currentAmmo, weaponStats.maxAmmo, false);
     }
 
     void PlaySound(AudioClip clip)
@@ -168,8 +171,8 @@ public class Weapon : MonoBehaviour
         line.SetPosition(0, startPoint);
         line.SetPosition(1, endPoint);
 
-        line.startWidth = trailWidth;
-        line.endWidth = trailWidth;
+        line.startWidth = weaponStats.trailWidth;
+        line.endWidth = weaponStats.trailWidth;
 
         line.startColor = Color.yellow;
         line.endColor = Color.yellow;
@@ -179,7 +182,7 @@ public class Weapon : MonoBehaviour
             line.material = bulletTrailMaterial;
         }
 
-        yield return new WaitForSeconds(trailDuration);
+        yield return new WaitForSeconds(weaponStats.trailDuration);
 
         Destroy(trailObject);
     }
